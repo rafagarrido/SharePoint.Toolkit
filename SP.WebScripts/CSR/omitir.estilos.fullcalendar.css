@@ -1,0 +1,35 @@
+/* Neutraliza los estilos de botones de FullCalendar */
+.fc .fc-button {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  padding: 4px 8px !important;
+  margin: 0 2px !important;
+  border-radius: 0 !important;
+  text-transform: none !important;
+  cursor: pointer !important;
+}
+
+/* Estados hover y active simplificados para heredar de SharePoint */
+.fc .fc-button:hover,
+.fc .fc-button:focus,
+.fc .fc-button:active {
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  color: inherit !important;
+}
+
+/* Desactiva los estilos de botón activo */
+.fc .fc-button.fc-button-active {
+  background: none !important;
+  color: inherit !important;
+  font-weight: bold !important;
+}
+
+/* Alinea botones correctamente */
+.fc .fc-toolbar button {
+  vertical-align: middle !important;
+}
