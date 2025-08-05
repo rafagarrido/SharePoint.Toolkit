@@ -254,5 +254,8 @@ dateClick: function(info) {
       generarLeyendaGrupos(eventos);
 
     });
-    SPClientTemplates.TemplateManager.RegisterTemplateOverrides(overrideCtx);
+   SP.SOD.executeFunc('clienttemplates.js', 'SPClientTemplates', function () {
+  SPClientTemplates.TemplateManager.RegisterTemplateOverrides(overrideCtx);
+});
+
 })();
