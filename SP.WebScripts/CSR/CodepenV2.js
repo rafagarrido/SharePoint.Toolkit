@@ -19,6 +19,23 @@
 }
 
   </style>
+
+(function () {
+  var overrideCtx = {};
+  overrideCtx.Templates = {};
+  overrideCtx.ListTemplateType = 100; // Cambia al tipo de lista que usas si no es 100
+  overrideCtx.OnPostRender = function (ctx) {
+    // Flag para evitar múltiples inicializaciones
+    if (window.fullcalendarInitialized) return;
+    window.fullcalendarInitialized = true;
+    .
+    .
+    .
+    .
+    .
+    .
+    .
+    .
 // 🔧 Función que personaliza los botones
     function personalizarBotonesCalendario() {
       const botones = [
@@ -237,3 +254,5 @@ dateClick: function(info) {
       generarLeyendaGrupos(eventos);
 
     });
+    SPClientTemplates.TemplateManager.RegisterTemplateOverrides(overrideCtx);
+})();
