@@ -13,19 +13,6 @@
       vertical-align: middle;
       font-size: 13px;
     }
-/* 🎯 Estilo para ocultar y mostrar el multicalendario */
-    #multiCalendario {
-      display: none;
-      margin-top: 20px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 10px;
-    }
-
-    .mini-cal {
-      border: 1px solid #ccc;
-      padding: 10px;
-    }
 .fc-prev-button .fc-icon,
 .fc-next-button .fc-icon {
   display: none;
