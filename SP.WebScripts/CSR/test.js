@@ -16,7 +16,7 @@
     overrideCtx.Templates.Footer = "";
 
     overrideCtx.Templates.Body = function (ctx) {
-        if (ctx.viewTitle !== "Reuniones Global") return ctx.RenderBody(ctx);
+        //if (ctx.viewTitle !== "Reuniones Global") return ctx.RenderBody(ctx);
 
         var events = (ctx.ListData.Row || []).map(function (item) {
             return {
