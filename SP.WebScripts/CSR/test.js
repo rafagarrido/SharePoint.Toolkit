@@ -1,325 +1,271 @@
-SP.SOD.executeFunc('clienttemplates.js', 'SPClientTemplates', function () {
+// OPTIMIZACIÓN FULLCALENDAR EN SHAREPOINT 2019
+(function () {
     var overrideCtx = {};
     overrideCtx.Templates = {};
-    
+
     overrideCtx.OnPreRender = function (ctx) {
-        if (ctx.viewTitle !== "Reuniones Global") {
-            SPClientTemplates.TemplateManager.RegisterTemplateOverrides({});
-        }
+        if (ctx.viewTitle !== "Reuniones Global") return;
     };
+
     overrideCtx.OnPostRender = function (ctx) {
-        if (!ctx || !ctx.ListData || !ctx.ListData.Row) return;
+        if (!ctx || !ctx.ListData || !ctx.ListData.Row || ctx._calendarInitialized) return;
+        ctx._calendarInitialized = true;
+    };
 
-        // Usar una propiedad personalizada en el contexto para guardar el flag
-        if (ctx.hasRenderedMyControl) return;
-
-        ctx.hasRenderedMyControl = true;
-       
-
-    }
     overrideCtx.Templates.Header = "<div id='fc-container'></div>";
     overrideCtx.Templates.Footer = "";
 
     overrideCtx.Templates.Body = function (ctx) {
-        if (ctx.viewTitle !== "Reuniones Global") {
-            return ctx.RenderBody ? ctx.RenderBody(ctx) : "";
-        }
+        if (ctx.viewTitle !== "Reuniones Global") return ctx.RenderBody(ctx);
 
-        var items = ctx.ListData.Row || [];
-        var fcEvents = items.map(function (item) {
+        var events = (ctx.ListData.Row || []).map(function (item) {
             return {
                 id: item.ID,
                 title: item.Title,
-                start: convertirFecha(item.EventDate) || convertirFecha(item.StartDate),
+                start: convertirFecha(item.EventDate || item.StartDate),
                 end: convertirFecha(item.EndDate),
                 backgroundColor: item.Color,
                 color: item.Color || '#3788d8',
                 location: item.Location || 'Sin reuniones',
                 extendedProps: {
-                    Ubicacion: item.Location
+                    location: item.Location
                 }
             };
         });
 
-        window._fcEvents = fcEvents;
-
-      
-
-        var legendHtml = buildLegend(fcEvents);
-
-        var layoutHtml = `
-      <div style="display: flex;">
-        ${legendHtml}
-        <div id="calendar" style="flex-grow: 1;"></div>
-      </div>
-    `;
-
-        return layoutHtml;
+        window._fcEvents = events;
+        return `<div id="calendar" style="width:100%"></div>`;
     };
 
     SPClientTemplates.TemplateManager.RegisterTemplateOverrides(overrideCtx);
 
-    var tryInit = setInterval(function () {
-        const { listaGrupos } = window._fcEvents;
-        var container = document.getElementById('calendar');
-        var events = window._fcEvents;
-        if (container && window.FullCalendar && Array.isArray(events)) {
-            clearInterval(tryInit);
+    if (!window._fcInitialized) {
+        window._fcInitialized = true;
+        var initCalendar = setInterval(function () {
+            var container = document.getElementById('calendar');
+            if (container && window.FullCalendar && Array.isArray(window._fcEvents)) {
+                clearInterval(initCalendar);
 
-            const currentYear = new Date().getFullYear();
-            const initialDateValue = `${currentYear}-01-01`;
-            var calendar = new window.FullCalendar.Calendar(container, {
-                initialDate: initialDateValue,
-                initialView: 'multiMonthYear',
-                contentHeight: 600,
-                aspectRatio: 2,
-                firstDay: 1,
-                events: events,
-                height: 'auto',
-                locale: 'es',
-                views: {
-                    multiMonth: {
-                        type: 'multiMonthYear',
-                        duration: { months: 12 },
-                        multiMonthMaxColumns: 3,
-                        titleFormat: { year: 'numeric' }
-                    }
-                },
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'btnMes,btnSemana,btnDia,btnMultiCal'
-                },
-                customButtons: {
-                    btnMes: {
-                        text: '',
-                        click: function () {
-                            calendar.changeView('dayGridMonth');
+                const { contenedorLeyenda, listaGrupos } = crearContenedorLeyendaCalendario('calendar');
+                generarLeyendaGrupos(window._fcEvents, listaGrupos);
+
+                var calendar = new window.FullCalendar.Calendar(container, {
+                    initialDate: new Date().getFullYear() + '-01-01',
+                    initialView: 'multiMonthYear',
+                    contentHeight: 600,
+                    aspectRatio: 2,
+                    firstDay: 1,
+                    events: window._fcEvents,
+                    height: 'auto',
+                    locale: 'es',
+                    views: {
+                        multiMonth: {
+                            type: 'multiMonthYear',
+                            duration: { months: 12 },
+                            multiMonthMaxColumns: 3,
+                            titleFormat: { year: 'numeric' }
                         }
                     },
-                    btnSemana: {
-                        text: '',
-                        click: function () {
-                            calendar.changeView('timeGridWeek');
-                        }
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'btnMes,btnSemana,btnDia,btnMultiCal'
                     },
-                    btnDia: {
-                        text: '',
-                        click: function () {
-                            calendar.changeView('timeGridDay');
-                        }
+                    customButtons: {
+                        btnMes: { text: '', click: () => calendar.changeView('dayGridMonth') },
+                        btnSemana: { text: '', click: () => calendar.changeView('timeGridWeek') },
+                        btnDia: { text: '', click: () => calendar.changeView('timeGridDay') },
+                        btnMultiCal: { text: '', click: () => calendar.changeView('multiMonth') }
                     },
-                    btnMultiCal: {
-                        text: '',
-                        click: () => calendar.changeView('multiMonth')
-                    }
-                },
-                dateClick: function (info) {
-                    if (calendar.view.type === 'multiMonth' || calendar.view.type === 'multiMonthYear') {
-                        if (info.date) {
+                    dateClick: function (info) {
+                        if (['multiMonth', 'multiMonthYear'].includes(calendar.view.type)) {
                             calendar.changeView('dayGridMonth', info.date);
-                        } else {
-                            console.warn('No se recibió fecha válida en dateClick en vista multiMonth');
                         }
-                    }
-                },
-                eventDidMount: function (info) {
-                    const start = info.event.start;
-                    const end = info.event.end;
-                    // Formatear horas en formato HH:MM (puedes ajustar a tu gusto)
-                    const formatHora = (fecha) => {
-                        if (!fecha) return '';
-                        return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                    };
-
-                    const tooltip = document.createElement('div');
-                    tooltip.className = 'fc-tooltip';
-                    tooltip.innerHTML = `
-    <strong>${info.event.title}</strong><br>
-     ${info.event.extendedProps.location || ''}<br>
-    ${start.toLocaleDateString('es-ES')}<br>
-    ${formatHora(start)} - ${formatHora(end)}
-   
-  `;
-
-                    tooltip.style.backgroundColor = info.event.backgroundColor || info.event.extendedProps.color || '#3788d8';
-
-                    document.body.appendChild(tooltip);
-
-                    info.el.addEventListener('mouseenter', function (e) {
-                        tooltip.style.display = 'block';
-                        tooltip.style.left = e.pageX + 10 + 'px';
-                        tooltip.style.top = e.pageY + 10 + 'px';
-                    });
-
-                    info.el.addEventListener('mousemove', function (e) {
-                        tooltip.style.left = e.pageX + 10 + 'px';
-                        tooltip.style.top = e.pageY + 10 + 'px';
-                    });
-
-                    info.el.addEventListener('mouseleave', function () {
+                    },
+                    eventDidMount: function (info) {
+                        var tooltip = document.createElement('div');
+                        tooltip.className = 'fc-tooltip';
+                        tooltip.innerHTML = `
+                            <strong>${info.event.title}</strong><br>
+                            ${info.event.extendedProps.location || ''}<br>
+                            ${info.event.start.toLocaleDateString('es-ES')}<br>
+                            ${formatHora(info.event.start)} - ${formatHora(info.event.end)}
+                        `;
+                        tooltip.style.position = 'absolute';
+                        tooltip.style.padding = '5px 10px';
+                        tooltip.style.borderRadius = '4px';
+                        tooltip.style.color = '#fff';
+                        tooltip.style.backgroundColor = info.event.backgroundColor || '#3788d8';
                         tooltip.style.display = 'none';
-                    });
-                }
+                        tooltip.style.zIndex = 1000;
+                        document.body.appendChild(tooltip);
 
-            });
+                        info.el.addEventListener('mouseenter', e => {
+                            tooltip.style.display = 'block';
+                            tooltip.style.left = e.pageX + 10 + 'px';
+                            tooltip.style.top = e.pageY + 10 + 'px';
+                        });
+                        info.el.addEventListener('mousemove', e => {
+                            tooltip.style.left = e.pageX + 10 + 'px';
+                            tooltip.style.top = e.pageY + 10 + 'px';
+                        });
+                        info.el.addEventListener('mouseleave', () => {
+                            tooltip.style.display = 'none';
+                        });
+                    }
+                });
 
-            calendar.render();
-            personalizarBotonesCalendario(); // 
-            generarLeyendaGrupos(eventos);
-            const mesBtn = document.querySelector('.fc-dayGridMonth-button');
-            if (mesBtn) {
-                mesBtn.innerHTML = '<span unselectable="on" class="ms-cui-ctl-largeIconContainer"><span unselectable="on" class=" ms-cui-img-32by32 ms-cui-img-cont-float"><img unselectable="on" alt="" src="/_layouts/15/3082/images/formatmap32x32.png?rev=43" style="top: -1px; left: -273px;"></span></span>';
-            }
-            const semanaBtn = document.querySelector('.fc-timeGridWeek-button');
-            if (semanaBtn) {
-                semanaBtn.innerHTML = '<span unselectable="on" class="ms-cui-ctl-largeIconContainer"><span unselectable="on" class=" ms-cui-img-32by32 ms-cui-img-cont-float"><img unselectable="on" alt="" src="/_layouts/15/3082/images/formatmap32x32.png?rev=43" style="top: -35px; left: -477px;"></span></span>';
-            }
-            const diarioBtn = document.querySelector('.fc-timeGridDay-button');
-            if (diarioBtn) {
-                diarioBtn.innerHTML = '<span unselectable="on" class="ms-cui-ctl-largeIconContainer"><span unselectable="on" class=" ms-cui-img-32by32 ms-cui-img-cont-float"><img unselectable="on" alt="" src="/_layouts/15/3082/images/formatmap32x32.png?rev=43" style="top: -239px; left: -239px;"></span></span>';
-            }
-        }
-    }, 100);
-    function personalizarBotonesCalendario() {
-        const botones = [
-            {
-                selector: '.fc-btnMes-button',
-                texto: 'Mes',
-                icono: '/_layouts/15/3082/images/formatmap32x32.png?rev=43'
-            },
-            {
-                selector: '.fc-btnSemana-button',
-                texto: 'Semana',
-                icono: ''
-            },
-            {
-                selector: '.fc-btnDia-button',
-                texto: 'Día',
-                icono: ''
-            },
-            {
-                selector: '.fc-prev-button',
-                texto: 'Anterior',
-                icono: ''
-            },
-            {
-                selector: '.fc-next-button',
-                texto: 'Siguiente',
-                icono: ''
-            },
-            {
-                selector: '.fc-today-button',
-                texto: 'Hoy',
-                icono: ''
-            },
-            {
-                selector: '.fc-btnMultiCal-button',
-                texto: 'Anual',
-                icono: ''
-            }
-        ];
+                calendar.render();
 
-        botones.forEach(({ selector, texto, icono }) => {
-            const btn = document.querySelector(selector);
-            if (btn) {
-                btn.innerHTML = '';
-                btn.classList.remove('fc-icon', 'fc-icon-chevron-left', 'fc-icon-chevron-right');
-                btn.innerHTML = `<img src="${icono}" alt="${texto}" style="width: 16px; height: 16px; vertical-align: middle;"> <span>${texto}</span>`;
+                // Guardar instancia para personalizar botones
+                window.miCalendario = calendar;
 
+                personalizarBotonesCalendario();
             }
-        });
+        }, 150);
     }
+
     function convertirFecha(fechaStr) {
-        var partesFechaHora = fechaStr.split(' ');
-        if (partesFechaHora.length != 2) return null;
-        var fecha = partesFechaHora[0];
-        var hora = partesFechaHora[1] || '';
-
-        var [dia, mes, anio] = fecha.split('/');
-        if (!dia || !mes || !anio) return null;
-
-        var fechaISO = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
-        return hora ? `${fechaISO}T${hora}` : fechaISO;
+        if (!fechaStr) return null;
+        var partes = fechaStr.split(' ');
+        var fecha = partes[0], hora = partes[1] || '';
+        var [d, m, y] = fecha.split('/');
+        if (!d || !m || !y) return null;
+        return hora ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${hora}` : `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
-    function buildLegend(events) {
-        var unique = new Map();
 
-        events.forEach(function (evt) {
-            if (evt.location && evt.color && !unique.has(evt.location)) {
-                unique.set(evt.location, evt.color);
-            }
-        });
-
-        var html = `<div id="fc-legend" style="min-width: 100px; margin-right: 20px;">`;
-        html += `<h4 style="margin-bottom: 10px;">Calendarios</h4>`;
-
-        unique.forEach(function (color, location) {
-            html += `
-        <div style="display: flex; align-items: center; margin-bottom: 6px;">
-          <span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; margin-right: 8px; border: 1px solid #ccc;"></span>
-          <span>${location}</span>
-        </div>`;
-        });
-
-        html += `</div>`;
-        return html;
+    function formatHora(fecha) {
+        return fecha ? fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
     }
-    function crearContenedorLeyendaCalendario(idCalendario) {
-        // Obtener el calendario original
-        var calendarioDiv = document.getElementById(idCalendario);
-        if (!calendarioDiv) {
-            console.error('No se encontró el calendario con id:', idCalendario);
-            return null;
+
+    function personalizarBotonesCalendario() {
+        const calendar = window.miCalendario;
+        const calendarWrapper = document.getElementById('calendar');
+
+        if (!calendarWrapper) {
+            console.warn('No se encontró el contenedor del calendario para personalizar botones.');
+            return;
         }
 
-        var parentOriginal = calendarioDiv.parentNode;
+        const customControls = document.createElement('div');
+        customControls.className = 'custom-controls';
+        customControls.style.display = 'flex';
+        customControls.style.justifyContent = 'space-between';
+        customControls.style.alignItems = 'center';
+        customControls.style.marginBottom = '1rem';
+        customControls.style.gap = '0.5rem';
 
-        // Crear contenedor padre
-        var contenedorPadre = document.createElement('div');
-        contenedorPadre.style.display = 'flex';
-        contenedorPadre.style.gap = '1.5rem';
-        contenedorPadre.style.alignItems = 'flex-start';
-        contenedorPadre.style.width = '100%';
-        contenedorPadre.style.boxSizing = 'border-box';
+        // Botón Mes Anterior
+        const btnPrev = document.createElement('button');
+        btnPrev.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:4px;" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 18l-6-6 6-6" stroke="black" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Anterior
+        `;
+        btnPrev.onclick = () => calendar.prev();
+        customControls.appendChild(btnPrev);
 
-        // Crear contenedor leyenda
-        var contenedorLeyenda = document.createElement('div');
-        contenedorLeyenda.id = 'leyenda-grupos';
-        contenedorLeyenda.style.minWidth = '180px';
-        contenedorLeyenda.style.borderRight = '2px solid #ccc';
-        contenedorLeyenda.style.paddingRight = '1rem';
-        contenedorLeyenda.style.boxSizing = 'border-box';
+        // Botón Hoy
+        const btnToday = document.createElement('button');
+        btnToday.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:4px;" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 7V3M16 7V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="black" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Hoy
+        `;
+        btnToday.onclick = () => calendar.today();
+        customControls.appendChild(btnToday);
 
-        // Título leyenda
-        var tituloLeyenda = document.createElement('h3');
-        tituloLeyenda.textContent = '👥 Grupos de trabajo';
-        tituloLeyenda.style.marginBottom = '1rem';
-        contenedorLeyenda.appendChild(tituloLeyenda);
+        // Botón Mes Siguiente
+        const btnNext = document.createElement('button');
+        btnNext.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:4px;" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 6l6 6-6 6" stroke="black" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Siguiente
+        `;
+        btnNext.onclick = () => calendar.next();
+        customControls.appendChild(btnNext);
 
-        // Lista leyenda
-        var listaGrupos = document.createElement('ul');
+        // Botón Vista Mensual
+        const btnMonth = document.createElement('button');
+        btnMonth.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:4px;" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="black" stroke-width="2" fill="none"/>
+                <path d="M3 10h18" stroke="black" stroke-width="2" fill="none"/>
+            </svg>
+            Vista mensual
+        `;
+        btnMonth.onclick = () => calendar.changeView('dayGridMonth');
+        customControls.appendChild(btnMonth);
+
+        // Botón Multimes
+        const btnMultiMonth = document.createElement('button');
+        btnMultiMonth.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:4px;" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="black" stroke-width="2" fill="none"/>
+                <path d="M7 10h3M14 10h3M7 17h3M14 17h3" stroke="black" stroke-width="2" fill="none"/>
+            </svg>
+            Multimes
+        `;
+        btnMultiMonth.onclick = () => calendar.changeView('multiMonth');
+        customControls.appendChild(btnMultiMonth);
+
+        // Insertar controles personalizados antes del calendario
+        calendarWrapper.parentNode.insertBefore(customControls, calendarWrapper);
+    }
+
+    // Crear contenedor para la leyenda del calendario y lista de grupos
+    function crearContenedorLeyendaCalendario(idCalendario) {
+        let contenedor = document.createElement('div');
+        contenedor.id = 'contenedor-leyenda-calendario';
+        contenedor.style.marginTop = '10px';
+        contenedor.style.display = 'flex';
+        contenedor.style.flexWrap = 'wrap';
+        contenedor.style.gap = '10px';
+
+        let listaGrupos = document.createElement('ul');
         listaGrupos.id = 'lista-grupos';
         listaGrupos.style.listStyle = 'none';
         listaGrupos.style.padding = '0';
-        listaGrupos.style.margin = '0';
-        contenedorLeyenda.appendChild(listaGrupos);
+        listaGrupos.style.display = 'flex';
+        listaGrupos.style.flexWrap = 'wrap';
+        listaGrupos.style.gap = '10px';
 
-        // Insertar contenedor padre antes del calendario
-        parentOriginal.insertBefore(contenedorPadre, calendarioDiv);
+        contenedor.appendChild(listaGrupos);
 
-        // Añadir leyenda y calendario al contenedor padre
-        contenedorPadre.appendChild(contenedorLeyenda);
-        contenedorPadre.appendChild(calendarioDiv);
+        let calendarContainer = document.getElementById(idCalendario);
+        if (calendarContainer && calendarContainer.parentNode) {
+            calendarContainer.parentNode.appendChild(contenedor);
+        }
 
-        // Estilos para el calendario
-        calendarioDiv.style.flex = '1 1 auto';
-        calendarioDiv.style.minWidth = '600px';
-        calendarioDiv.style.boxSizing = 'border-box';
-        calendarioDiv.style.overflow = 'hidden';
-
-        return { contenedorPadre, contenedorLeyenda, calendarioDiv, listaGrupos };
+        return { contenedorLeyenda: contenedor, listaGrupos: listaGrupos };
     }
-    
 
-});
+    // Generar leyenda de colores para los grupos
+    function generarLeyendaGrupos(eventos, listaGrupos) {
+        const gruposUnicos = Array.from(new Set(eventos.map(e => e.color).filter(Boolean)));
+
+        gruposUnicos.forEach(color => {
+            const li = document.createElement('li');
+            li.style.display = 'flex';
+            li.style.alignItems = 'center';
+            li.style.gap = '5px';
+
+            const colorBox = document.createElement('span');
+            colorBox.style.backgroundColor = color;
+            colorBox.style.width = '15px';
+            colorBox.style.height = '15px';
+            colorBox.style.display = 'inline-block';
+            colorBox.style.borderRadius = '3px';
+
+            const texto = document.createElement('span');
+            texto.textContent = color; // Puedes mapear a nombres si tienes
+
+            li.appendChild(colorBox);
+            li.appendChild(texto);
+            listaGrupos.appendChild(li);
+        });
+    }
+})();
