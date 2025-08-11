@@ -1,40 +1,61 @@
+
 (function () {
     // Definimos una variable para almacenar la plantilla CSR
     var overrideCtx = {};
-
+    
     // Sobrescribimos el campo 'Color'
     overrideCtx.Templates = {};
     overrideCtx.Templates.Fields = {
         // 'Color' es el nombre interno de la columna
         "Color": {
-            // Esta función se ejecutará cuando se renderice el campo en el modo de vista (display)
+            // Esta función se ejecutará cuando se renderice el campo en la vista
             "View": function (ctx) {
-                // Obtenemos el valor del campo
-                var colorValue = ctx.CurrentItem.Color;
-                // Si el valor no es nulo o vacío, lo mostramos
-                if (colorValue) {
-                    // Creamos un elemento span con el color de fondo
-                    return "<span style='display:inline-block;width:20px;height:20px;background-color:" + colorValue + ";border:1px solid #ccc;'></span> " + colorValue;
-                }
-                // Si el valor es nulo, devolvemos una cadena vacía
-                return "";
-            },
-            // Esta función se ejecutará cuando se renderice el campo en el modo de edición o nuevo elemento (edit/new)
-            "EditForm": function (ctx) {
-                // Obtenemos el valor actual del campo
-                var colorValue = ctx.CurrentItem.Color || "#000000";
-                // Devolvemos el HTML para un input de tipo 'color'
-                return "<input type='color' id='" + ctx.CurrentFieldSchema.Name + "' name='" + ctx.CurrentFieldSchema.Name + "' value='" + colorValue + "'>";
-            },
-            "NewForm": function (ctx) {
-                // Para el formulario de nuevo elemento, establecemos un valor por defecto
-                var colorValue = "#000000";
-                return "<input type='color' id='" + ctx.CurrentFieldSchema.Name + "' name='" + ctx.CurrentFieldSchema.Name + "' value='" + colorValue + "'>";
+                var colorValue = ctx.CurrentItem.Color || "#ffffff";
+                var itemId = ctx.CurrentItem.ID;
+                var fieldName = ctx.CurrentFieldSchema.Name;
+                
+                // Creamos un input de tipo 'color' y le añadimos un evento 'onchange'
+                var html = "<input type='color' value='" + colorValue + "' onchange='updateListItemColor(" + itemId + ", \"" + fieldName + "\", this.value);'>";
+                
+                return html;
             }
         }
     };
-
+    
     // Registramos la plantilla
     SPClientTemplates.TemplateManager.RegisterTemplateOverrides(overrideCtx);
+
 })();
+
+// --- Función para actualizar el elemento de la lista usando JSOM ---
+
+function updateListItemColor(itemId, fieldName, colorValue) {
+    // Reemplaza 'NombreDeTuLista' por el nombre exacto de tu lista de SharePoint
+    var listTitle = 'NombreDeTuLista';
+    
+    var clientContext = new SP.ClientContext.get_current();
+    var oList = clientContext.get_web().get_lists().getByTitle(listTitle);
+    
+    // Obtenemos el elemento por su ID
+    var oListItem = oList.getItemById(itemId);
+    
+    // Establecemos el nuevo valor en el campo
+    oListItem.set_item(fieldName, colorValue);
+    
+    oListItem.update();
+    
+    // Ejecutamos la consulta para guardar los cambios
+    clientContext.executeQueryAsync(
+        Function.createDelegate(this, successHandler), 
+        Function.createDelegate(this, errorHandler)
+    );
+
+    function successHandler() {
+        console.log("El color del elemento " + itemId + " se ha actualizado correctamente.");
+    }
+    
+    function errorHandler(sender, args) {
+        console.log('Error al actualizar el elemento: ' + args.get_message());
+    }
+}
 
