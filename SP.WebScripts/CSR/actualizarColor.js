@@ -63,3 +63,31 @@ function loadSharePointEvents(successCallback) {
         }
     });
 }
+function loadSharePointEvents(info, successCallback, failureCallback) {
+    var context = SP.ClientContext.get_current();
+    var lista = context.get_web().get_lists().getByTitle('MiLista');
+    var camlQuery = new SP.CamlQuery();
+    camlQuery.set_viewXml("<View><Query></Query></View>"); // Ajusta la query si quieres filtrar
+    var items = lista.getItems(camlQuery);
+
+    context.load(items);
+    context.executeQueryAsync(
+        function() {
+            var events = [];
+            var enumerator = items.getEnumerator();
+            while (enumerator.moveNext()) {
+                var item = enumerator.get_current();
+                events.push({
+                    title: item.get_item('Title'),
+                    start: item.get_item('Start'),
+                    end: item.get_item('End')
+                });
+            }
+            successCallback(events);
+        },
+        function(sender, args) {
+            console.error('Error cargando eventos:', args.get_message());
+            failureCallback(args.get_message());
+        }
+    );
+}
