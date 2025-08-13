@@ -46,3 +46,20 @@ context.executeQueryAsync(
     }
 );
 }
+function loadSharePointEvents(successCallback) {
+    $.ajax({
+        url: "/_api/web/lists/getbytitle('MiLista')/items?$select=Title,Start,End",
+        type: "GET",
+        headers: { "Accept": "application/json; odata=verbose" },
+        success: function(data) {
+            var events = data.d.results.map(function(item) {
+                return {
+                    title: item.Title,
+                    start: item.Start,
+                    end: item.End
+                };
+            });
+            successCallback(events);
+        }
+    });
+}
