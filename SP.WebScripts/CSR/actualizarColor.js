@@ -91,3 +91,39 @@ function loadSharePointEvents(info, successCallback, failureCallback) {
         }
     );
 }
+function refreshCtxListData(ctx) {
+    var clientContext = SP.ClientContext.get_current();
+    var list = clientContext.get_web().get_lists().getByTitle(ctx.ListTitle);
+
+    // Cargar todos los campos que necesites
+    var camlQuery = new SP.CamlQuery();
+    camlQuery.set_viewXml('<View><Query></Query></View>');
+
+    var listItems = list.getItems(camlQuery);
+    clientContext.load(listItems);
+
+    clientContext.executeQueryAsync(function() {
+        var enumerator = listItems.getEnumerator();
+        var newRows = [];
+
+        while (enumerator.moveNext()) {
+            var item = enumerator.get_current();
+
+            // Ojo: los nombres de campo deben coincidir con la vista
+            newRows.push({
+                ID: item.get_id(),
+                Title: item.get_item('Title')
+                // agrega más campos según necesites
+            });
+        }
+
+        // Reemplazar datos antiguos por los nuevos
+        ctx.ListData.Row = newRows;
+
+        // Volver a renderizar la vista
+        RenderListView(ctx);
+
+    }, function(sender, args) {
+        console.error("Error refrescando datos: " + args.get_message());
+    });
+}
